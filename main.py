@@ -33,7 +33,7 @@ DATA_PATH = "data"
 # List of websites to crawl
 urls = []
 
-
+@st.cache_resource
 def crawl_webpage(url):
     response = requests.get(url)
     print(f"Response Status Code: {response.status_code} for {url}")
