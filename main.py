@@ -250,6 +250,7 @@ if st.button("Enter"):
 
         # Run similarity search
         results = db.similarity_search_with_relevance_scores(query_text, k=2)
+        st.write(len(results))
         if len(results) == 0 or results[0][1] < 0.7:
             st.write("It looks like your question might not be related to this content. Could you provide more details or clarify?")
             return
