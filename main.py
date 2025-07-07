@@ -118,7 +118,7 @@ def add_to_chroma(chunks: list[Document]):
 
 
 db = Chroma(persist_directory=CHROMA_PATH,
-            embedding_function=get_embedding_function())
+            embedding_function=get_embedding_function(), collection_metadata={"hnsw:space": "cosine"})
 
 
 def add_url_and_pdf_input():
@@ -246,7 +246,7 @@ if st.button("Enter"):
 
         # Load the Chroma DB
         db = Chroma(persist_directory=CHROMA_PATH,
-                    embedding_function=get_embedding_function())
+                    embedding_function=get_embedding_function(), collection_metadata={"hnsw:space": "cosine"})
 
         # Run similarity search
         results = db.similarity_search_with_relevance_scores(query_text, k=2)
