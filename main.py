@@ -24,6 +24,8 @@ from openai import OpenAI
 import sqlite3
 import sys
 
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 CHROMA_PATH = "chroma"
 DATA_PATH = "data"
