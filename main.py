@@ -86,7 +86,7 @@ def calculate_chunk_ids(chunks):
 
 
 def get_embedding_function():
-    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L12-v2", show_progress=True, model_kwargs={"device":"cpu"}, encode_kwargs={"normalize_embeddings": False})
+    return HuggingFaceEmbeddings(model_name="BAAI/bge-m3", show_progress=True, model_kwargs={"device":"cpu"}, encode_kwargs={"normalize_embeddings": False})
 
 
 def add_to_chroma(chunks: list[Document]):
