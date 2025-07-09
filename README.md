@@ -1,5 +1,5 @@
 # Welcome to SourceMind!
-This is a very simple project built in a team of 4 in an AI camp to have a hands on experience. 😬*Basically a wrapper*🥲
+This is a very simple project built in a team of 4 in an AI camp to have a hands on experience. 😬*Basically a wrapper*🥲 \n
 It's a project where user provide PDF files and URLs and asks questions and get answers from the AI!
 <br>
 
