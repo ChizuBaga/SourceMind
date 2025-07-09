@@ -1,4 +1,4 @@
-# Welcome to SourceMind!
+# Welcome to SourceMind!🤖
 This is a very simple project built in a team of 4 in an AI camp to have a hands on experience. 😬*Basically a wrapper*🥲 <br>
 It's a project where user provide PDF files and URLs and asks questions and get answers from the AI!
 <br>
@@ -12,6 +12,3 @@ A simple RAG model was also built to retrieve URL / PDF contents from user.<br>
 <br>
 Currently, this project is actively being improve, due to the unsatifactory of performance when utilizing different models due to different structures.
 <br>
-
-## Contribute
-Feel free to fork and request a PR if you want to. 🍔
