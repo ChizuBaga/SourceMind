@@ -1,11 +1,10 @@
 import os
 import streamlit as st
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings
-
+from transformers import pipeline, AutoTokenizer
+from langchain_huggingface import HuggingFacePipeline
 from transformers import AutoModelForCausalLM
 
 import PyPDF2
@@ -18,7 +17,6 @@ from langchain.schema.document import Document
 import requests
 from fpdf import FPDF
 from bs4 import BeautifulSoup
-from openai import OpenAI
 
 #to compatible with the streamlit version
 import sqlite3
@@ -123,89 +121,76 @@ db = Chroma(persist_directory=CHROMA_PATH,
 
 def add_url_and_pdf_input():
     st.subheader("Add URLs and PDF Files")
+
     # Limit to 2 URLs
     url1 = st.text_input("Enter URL 1:")
     url2 = st.text_input("Enter URL 2:")
 
     # Limit to 2 PDF uploads
-    pdf1 = st.file_uploader("Upload PDF 1",
-                            type="pdf",
-                            label_visibility='collapsed')
-    pdf2 = st.file_uploader("Upload PDF 2",
-                            type="pdf",
-                            label_visibility='collapsed')
+    pdf1 = st.file_uploader("Upload PDF 1", type="pdf", label_visibility='collapsed')
+    pdf2 = st.file_uploader("Upload PDF 2", type="pdf", label_visibility='collapsed')
 
     if st.button("Submit"):
-        urls = []
-        if url1:
-            urls.append(url1)
-        if url2:
-            urls.append(url2)
-
-        pdf_files = []
-        if pdf1:
-            pdf_files.append(pdf1)
-        if pdf2:
-            pdf_files.append(pdf2)
+        urls = [u for u in [url1, url2] if u]
+        pdf_files = [p for p in [pdf1, pdf2] if p]
 
         # Process URLs
         for i, url in enumerate(urls):
             website_text = crawl_webpage(url)
-
             if website_text:
-                # Base filename for the content from the URL
-                base_filename = os.path.join("data/", f'url_content_{i+1}.pdf')
-
-                # Generate a unique filename if the file already exists
+                # Save a local PDF copy (optional)
+                base_filename = os.path.join(DATA_PATH, f'url_content_{i+1}.pdf')
                 pdf_path = base_filename
                 count = 1
                 while os.path.exists(pdf_path):
-                    # Create a new filename by appending a counter
-                    pdf_path = os.path.join("data/",
-                                            f'url_content_{i+1}_{count}.pdf')
+                    pdf_path = os.path.join(DATA_PATH, f'url_content_{i+1}_{count}.pdf')
                     count += 1
-
-                # Save content to the unique PDF
                 save_to_pdf(website_text, pdf_path)
 
-                # Create a Document object to add to Chroma
-                doc = Document(page_content=website_text,
-                               metadata={"source": url})
-                add_to_chroma([doc])  # Add document to Chroma
+                # Wrap in Document, split, and embed
+                doc = Document(page_content=website_text, metadata={"source": url, "page": 1})
+                chunks = split_documents([doc])
+                add_to_chroma(chunks)
 
-                st.success(f"{url} uploaded! ✅")
+                st.success(f"{url} content processed and added ✅")
             else:
-               st.error(f"Oops! We couldn't access the content at {url}. Please check the link and try again or provide us a new link.")
+                st.error(f"Could not access {url}. Please check the link.")
 
         # Process PDFs
         for i, pdf in enumerate(pdf_files):
-            # Base filename for the uploaded PDF
-            base_pdf_path = os.path.join("data/", f'uploaded_pdf_{i+1}.pdf')
-
-            # Generate a unique filename if the file already exists
-            pdf_path = base_pdf_path
+            pdf_path = os.path.join(DATA_PATH, f'uploaded_pdf_{i+1}.pdf')
             count = 1
             while os.path.exists(pdf_path):
-                # Create a new filename by appending a counter
-                pdf_path = os.path.join("data/",
-                                        f'uploaded_pdf_{i+1}_{count}.pdf')
+                pdf_path = os.path.join(DATA_PATH, f'uploaded_pdf_{i+1}_{count}.pdf')
                 count += 1
 
-            # Save the uploaded PDF to the unique path
             with open(pdf_path, "wb") as f:
                 f.write(pdf.getbuffer())
-            st.success(f"Uploaded PDF!")
+            st.success(f"Uploaded PDF: {pdf_path}")
 
-            # Extract text from the uploaded PDF
+            # Extract text, split, and embed
             pdf_text = extract_text_from_pdf(pdf_path)
+            doc = Document(page_content=pdf_text, metadata={"source": pdf_path, "page": 1})
+            chunks = split_documents([doc])
+            add_to_chroma(chunks)
 
-            # Create a Document object to add to Chroma
-            doc = Document(page_content=pdf_text,
-                           metadata={"source": pdf_path})
-            add_to_chroma([doc])  # Add document to Chroma
+            st.success(f"PDF content from {pdf_path} processed and added ✅")
 
-            st.success(f"Content from {pdf_path} received!")
+@st.cache_resource
+def load_llm():
+    model_id = "Qwen/Qwen3-0.6B"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(model_id)
+    pipe = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=512,  # lower for speed
+        temperature=0.7
+    )
+    return HuggingFacePipeline(pipeline=pipe)
 
+llm = load_llm()
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file."""
@@ -243,39 +228,39 @@ if st.button("Enter"):
     """
 
     def main(query_text=question):
-
         # Load the Chroma DB
-        db = Chroma(persist_directory=CHROMA_PATH,
-                    embedding_function=get_embedding_function(), collection_metadata={"hnsw:space": "cosine"})
+        db = Chroma(
+            persist_directory=CHROMA_PATH,
+            embedding_function=get_embedding_function(),
+            collection_metadata={"hnsw:space": "cosine"}
+        )
 
-        # Run similarity search
+    # Run similarity search
         results = db.similarity_search_with_relevance_scores(query_text, k=2)
-        st.write(results)
-        if len(results) == 0 or results[0][1] < 0.7:
-            st.write(len(results))
-            st.write("It looks like your question might not be related to this content. Could you provide more details or clarify?")
+        if not results or results[0][1] < 0.7:
+            st.warning("It looks like your question might not be related to this content.")
             return
 
-        # Create a context from the results
-        context_text = "\n\n---\n\n".join(
-            [doc.page_content for doc, _score in results])
+    # Create context from retrieved docs
+        context_text = "\n\n---\n\n".join([doc.page_content for doc, _ in results])
 
-        # Prepare the prompt with the context and the query
-        prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
-        prompt = prompt_template.format(context=context_text,
-                                        question=query_text)
+    # Format prompt
+        prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE).format(
+            context=context_text,
+            question=query_text
+        )
 
-        # Use OpenAI model to get a response
-        model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-0.6B")
-        response_text = model.predict(prompt)
+    # Generate answer
+        response_text = llm.invoke(prompt)
 
-        # Display the sources and the response
-        sources = [doc.metadata.get("source", None) for doc, _score in results]
-        formatted_response = f"{response_text}"
-        st.write(formatted_response)
+    # Display
+        sources = [doc.metadata.get("source", None) for doc, _ in results]
+        st.markdown(f"**Answer:** {response_text}")
+        st.markdown(f"**Sources:** {sources}")
 
     # Run the main function
-    main()
+
+main()
 
 
 def main2():
@@ -315,5 +300,5 @@ def clear_database():
         shutil.rmtree(CHROMA_PATH)
 
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     main2()
